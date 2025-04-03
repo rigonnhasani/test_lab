@@ -1,14 +1,82 @@
-version: '3.7'
+version: "3.9"
 
 services:
-  environment:
-    container_name: environment
-    build:
-      context: .
-      dockerfile: dockerfile
+
+  node-app:
+    build: .
     ports:
-      - 3005:3005
-    stdin_open: true
+      - "3000:3000"
+    depends_on:
+      - db
     environment:
-      - CHOKIDAR_USEPOLLING=true
-    command: node app.js
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_HOST: db
+      DB_PORT: 3306
+    networks:
+      - app_network
+
+  db:
+    image: mysql:9.2
+    restart: always
+    container_name: mysql_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app_network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+    networks:
+      - app_network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: always
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    networks:
+      - app_network
+
+
+ # mysql-exporter:
+   # image: prom/mysqld-exporter
+   # container_name: mysql_exporter
+   # restart: always
+   # environment:
+   #   DATA_SOURCE_NAME: "${DB_USER}:${DB_PASSWORD}@tcp(db:3306)/${DB_NAME}"
+   # ports:
+   #   - "9104:9104"
+   # depends_on:
+   #   - db
+   # networks:
+   #   - app_network
+
+networks:
+  app_network:
+
+volumes:
+  mysql_data:
+  grafana_data:
